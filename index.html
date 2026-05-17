@@ -462,8 +462,15 @@ td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px
 }
 .form-input:focus{border-color:var(--c-primary);box-shadow:0 0 0 3px rgba(14,165,122,.07)}
 .form-input.input-err{border-color:var(--c-danger);box-shadow:0 0 0 3px rgba(229,72,77,.07)}
+select.form-input{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238491a0' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 .form-err{color:var(--c-danger);font-size:11.5px;margin-top:4px;display:none;font-weight:500}
 .form-hint{font-size:11px;color:var(--c-text-3);margin-top:3px}
+.form-end-time{
+  padding:10px 13px;border-radius:var(--r-sm);font-size:14px;color:var(--c-text);
+  background:var(--c-primary-ll);border:1.5px solid var(--c-primary-l);
+  font-weight:600;letter-spacing:-.2px;min-height:42px;
+  display:flex;align-items:center;
+}
 .form-row{display:flex;gap:12px}
 .form-row .form-group{flex:1}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:0 28px 24px}
@@ -942,6 +949,7 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
                 <th>Телефон</th>
                 <th>Авто</th>
                 <th>Предоплата</th>
+                <th>Окончание</th>
                 <th style="width:100px">Действия</th>
               </tr>
             </thead>
@@ -1018,12 +1026,28 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
           </div>
           <div class="form-group">
             <label>Время заезда <span class="req">*</span></label>
-            <input type="time" class="form-input" id="checkInTime" required>
+            <input type="time" class="form-input" id="checkInTime" required onchange="updateEndTime()">
           </div>
         </div>
         <div class="form-group">
           <label>Дата заезда <span class="req">*</span></label>
-          <input type="date" class="form-input" id="checkInDate" required>
+          <input type="date" class="form-input" id="checkInDate" required onchange="updateEndTime()">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Период брони</label>
+            <select class="form-input" id="duration" onchange="updateEndTime()">
+              <option value="">—</option>
+              <option value="12">12 часов</option>
+              <option value="24">24 часа</option>
+              <option value="36">36 часов</option>
+              <option value="48">48 часов</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Окончание брони</label>
+            <div class="form-end-time" id="endTimeDisplay">—</div>
+          </div>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -1197,6 +1221,8 @@ function openModal(editId){
       document.getElementById('checkInTime').value=b.time;
       document.getElementById('carNumber').value=b.carNumber||'';
       document.getElementById('prepay').value=b.prepay||'';
+      document.getElementById('duration').value=b.duration||'';
+      updateEndTime();
       document.getElementById('gazeboError').style.display='none';
     }
   }else{
@@ -1206,6 +1232,7 @@ function openModal(editId){
     document.getElementById('bookingForm').reset();
     document.getElementById('checkInDate').value=getTodayISO();
     document.getElementById('gazeboError').style.display='none';
+    updateEndTime();
   }
 }
 function closeModal(){
@@ -1225,6 +1252,7 @@ function handleSubmit(e){
   var time=document.getElementById('checkInTime').value;
   var car=document.getElementById('carNumber').value.trim();
   var prepay=document.getElementById('prepay').value.trim();
+  var dur=document.getElementById('duration').value;
 
   if(!name||!gazebo||!date||!time){showToast('Заполните обязательные поля','error');return}
   if(isGazeboConflict(gazebo,date,editId||undefined)){
@@ -1237,7 +1265,7 @@ function handleSubmit(e){
 
   if(editId){
     db.collection('bookings').doc(editId).set({
-      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay
+      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay,duration:dur
     },{merge:true}).then(function(){
       showToast('Заявка обновлена');
     }).catch(function(err){
@@ -1245,7 +1273,7 @@ function handleSubmit(e){
     });
   }else{
     db.collection('bookings').add({
-      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay,
+      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay,duration:dur,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     }).then(function(){
       showToast('Заявка создана');
@@ -1291,6 +1319,25 @@ function fmtPhone(phone){
   return phone;
 }
 function fmtCar(car){return car?car.replace(/\s+/g,' ').trim().toUpperCase():''}
+
+function calcEndTime(date, time, durationHours){
+  if(!date||!time||!durationHours)return'';
+  var d=new Date(date+'T'+time);
+  d.setHours(d.getHours()+parseInt(durationHours));
+  var ed=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  var et=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return fmtDate(ed)+' '+et;
+}
+
+function updateEndTime(){
+  var date=document.getElementById('checkInDate').value;
+  var time=document.getElementById('checkInTime').value;
+  var dur=document.getElementById('duration').value;
+  var display=document.getElementById('endTimeDisplay');
+  var end=calcEndTime(date,time,dur);
+  display.textContent=end||'—';
+  display.style.borderColor=end?'var(--c-primary)':'var(--c-primary-l)';
+}
 
 // Sort
 var sortField='date',sortDir='asc';
@@ -1381,10 +1428,12 @@ function renderGazeboGrid(){
     if(ob){occ++}else{free++}
     var cls=ob?' occupied':'';
     var clientName=ob?ob.clientName:'';
+    var endStr=ob&&ob.duration?'<span class="client">До '+calcEndTime(ob.date,ob.time,ob.duration)+'</span>':'';
     return'<div class="gazebo-card-link'+cls+'">'+
       '<svg class="icon" style="width:22px;height:22px"><use href="#ic-home"/></svg>'+
       '<span class="num">'+num+'</span>'+
       (ob?'<span class="client">'+clientName+'</span>':'')+
+      endStr+
     '</div>';
   }).join('');
 
@@ -1407,11 +1456,12 @@ function renderOccupiedTab(){
   }else{
     dateB.sort(function(a,b){return(parseInt(a.gazeboNumber)||0)-(parseInt(b.gazeboNumber)||0)});
     list.innerHTML=dateB.map(function(b){
+      var endStr=b.duration?' → '+calcEndTime(b.date,b.time,b.duration):'';
       return'<div class="gazebo-item">'+
         '<div class="gazebo-num">'+b.gazeboNumber+'</div>'+
         '<div class="gazebo-detail">'+
           '<div class="name">'+b.clientName+'</div>'+
-          '<div class="meta"><span>🕐 '+b.time+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
+          '<div class="meta"><span>🕐 '+b.time+endStr+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
         '</div></div>';
     }).join('');
   }
@@ -1436,12 +1486,13 @@ function renderAll(){
 
 function renderTable(bs){
   var t=document.getElementById('tableBody');
-  if(!bs.length){t.innerHTML='<tr><td colspan="8"><div class="empty-state"><span class="emoji">📋</span>Нет заявок</div></td></tr>';return}
+  if(!bs.length){t.innerHTML='<tr><td colspan="9"><div class="empty-state"><span class="emoji">📋</span>Нет заявок</div></td></tr>';return}
   var today=getTodayISO();
   t.innerHTML=bs.map(function(b){
     var cls=b.date===today?' row-today':'';
     var phoneEsc=b.phone.replace(/'/g,"\\'");
     var nameEsc=b.clientName.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
     return'<tr class="'+cls+'">'+
       '<td>'+(b.date===today?'⭐ ':'')+fmtDate(b.date)+'</td>'+
       '<td>'+b.time+'</td>'+
@@ -1451,6 +1502,7 @@ function renderTable(bs){
         '<button class="copy-btn" title="Копировать" onclick="copyPhone(\''+phoneEsc+'\')"><svg class="icon icon-sm"><use href=\'#ic-copy\'></use></svg></button></td>'+
       '<td>'+fmtCar(b.carNumber)+'</td>'+
       '<td>'+(b.prepay||'')+'</td>'+
+      '<td>'+(endStr||'—')+'</td>'+
       '<td><div class="actions-inline">'+
         '<button class="btn btn-outline btn-xs" onclick="openModal(\''+b.id+'\')" title="Изменить"><svg class="icon icon-sm"><use href=\'#ic-edit\'></use></svg></button>'+
         '<button class="btn btn-danger btn-xs" onclick="openConfirm(\''+b.id+'\',\''+nameEsc+'\',\''+b.gazeboNumber+'\')" title="Удалить"><svg class="icon icon-sm"><use href=\'#ic-trash\'></use></svg></button>'+
@@ -1481,6 +1533,7 @@ function renderCards(bs){
         '<button class="copy-btn" onclick="copyPhone(\''+phoneEsc+'\')"><svg class="icon icon-sm"><use href=\'#ic-copy\'></use></svg></button></span></div>'+
       '<div class="booking-card-row"><span class="label"><svg class="icon icon-sm"><use href="#ic-car"></use></svg></span><span class="value mono">'+fmtCar(b.carNumber)+'</span></div>'+
       (b.prepay?'<div class="booking-card-row"><span class="label"><svg class="icon icon-sm"><use href="#ic-star"></use></svg></span><span class="value mono">Предоплата: '+b.prepay+'</span></div>':'')+
+      (b.duration?'<div class="booking-card-row"><span class="label"><svg class="icon icon-sm"><use href="#ic-clock"></use></svg></span><span class="value mono">До '+calcEndTime(b.date,b.time,b.duration)+'</span></div>':'')+
       '<div class="booking-card-actions">'+
         '<button class="btn btn-outline" style="flex:1" onclick="openModal(\''+b.id+'\')"><svg class="icon icon-sm"><use href=\'#ic-edit\'></use></svg> Изменить</button>'+
         '<button class="btn btn-danger" style="flex:1" onclick="openConfirm(\''+b.id+'\',\''+nameEsc+'\',\''+b.gazeboNumber+'\')"><svg class="icon icon-sm"><use href=\'#ic-trash\'></use></svg> Удалить</button>'+
@@ -1511,11 +1564,12 @@ function renderOccupied(){
   }else{
     dateB.sort(function(a,b){return(parseInt(a.gazeboNumber)||0)-(parseInt(b.gazeboNumber)||0)});
     list.innerHTML=dateB.map(function(b){
+      var endStr=b.duration?' → '+calcEndTime(b.date,b.time,b.duration):'';
       return'<div class="gazebo-item">'+
         '<div class="gazebo-num">'+b.gazeboNumber+'</div>'+
         '<div class="gazebo-detail">'+
           '<div class="name">'+b.clientName+'</div>'+
-          '<div class="meta"><span>🕐 '+b.time+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
+          '<div class="meta"><span>🕐 '+b.time+endStr+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
         '</div></div>';
     }).join('');
   }
@@ -1541,9 +1595,10 @@ function copyPhone(phone){
 function exportCSV(){
   var bs=getFiltered();
   if(!bs.length){showToast('Нет данных для экспорта','error');return}
-  var h='Дата;Время;Беседка;Клиент;Телефон;Автомобиль;Предоплата\n';
+  var h='Дата;Время;Беседка;Клиент;Телефон;Автомобиль;Предоплата;Окончание\n';
   var rows=bs.map(function(b){
-    return [fmtDate(b.date),b.time,'№'+b.gazeboNumber,b.clientName,b.phone,b.carNumber,b.prepay||'']
+    var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
+    return [fmtDate(b.date),b.time,'№'+b.gazeboNumber,b.clientName,b.phone,b.carNumber,b.prepay||'',endStr]
       .map(function(v){return'"'+String(v).replace(/"/g,'""')+'"'}).join(';');
   }).join('\n');
   var blob=new Blob(['\uFEFF'+h+rows],{type:'text/csv;charset=utf-8'});
