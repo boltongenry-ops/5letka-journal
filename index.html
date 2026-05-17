@@ -572,8 +572,6 @@ td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px
 .tab-btn svg{width:16px;height:16px}
 
 /* ===== Gazebo Grid ===== */
-.gazebo-grid-wrap{display:none}
-.gazebo-grid-wrap.active{display:block}
 .gazebo-grid-header{
   display:flex;align-items:center;justify-content:space-between;
   flex-wrap:wrap;gap:10px;margin-bottom:14px;
@@ -614,9 +612,14 @@ td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px
 .gazebo-card-link.occupied .num{color:var(--c-text-3)}
 .gazebo-card-link.occupied .icon{color:var(--c-text-3);opacity:.4}
 
-/* Journal wrap - toggled by tabs */
-.journal-wrap{display:block}
-.journal-wrap.hidden{display:none}
+/* Tab panels */
+.journal-wrap,.gazebo-grid-wrap,.occupied-wrap{display:none}
+.journal-wrap.active,.gazebo-grid-wrap.active,.occupied-wrap.active{display:block}
+
+.occupied-wrap .card{border:2px solid var(--c-warning-b)}
+
+/* Hide occupied tab on desktop */
+@media(min-width:769px){.tab-occupied{display:none}}
 
 /* Auth responsive */
 @media(max-width:768px){
@@ -651,21 +654,22 @@ td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px
   .header-actions .btn{font-size:12px;padding:7px 12px}
   .header-actions .btn-outline:not(.btn-sm){display:none}
 
-  .sidebar{width:100%;flex-direction:column;gap:0}
-  .sidebar .card:first-child{display:none}
-  .sidebar.open .card:first-child{display:block}
-  .sidebar-toggle{display:flex}
-  .sidebar-toggle.open-icon svg:last-child{transform:rotate(180deg)}
-  .mobile-occupied{display:block}
+  .sidebar{display:none!important}
+  .mobile-occupied{display:none!important}
+
+  .tabs{position:sticky;top:0;z-index:50;margin-bottom:10px;border-radius:var(--r);box-shadow:var(--s-sm)}
+  .tab-btn{font-size:12.5px;padding:8px 10px}
+  .tab-btn svg{width:14px;height:14px}
+
+  .toolbar{position:sticky;top:52px;z-index:49;background:var(--c-bg);padding-bottom:8px;gap:8px}
+  #mainToolbar{margin-bottom:6px}
+  .input-date{flex:1;width:auto}
+  .input-search{flex:2;width:auto;min-width:0}
+  .toolbar-spacer{display:none}
 
   .stats-row{gap:8px}
   .stat-item{padding:14px 12px}
   .stat-val{font-size:24px}
-
-  .toolbar{gap:8px}
-  .input-date{flex:1;width:auto}
-  .input-search{flex:2;width:auto;min-width:0}
-  .toolbar-spacer{display:none}
 
   .table-wrap{display:none}
   .booking-cards{display:flex}
@@ -905,22 +909,26 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
       <!-- Tab navigation -->
       <div class="tabs">
         <button class="tab-btn active" data-tab="journal" onclick="switchTab('journal')">
-          <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg> Журнал заявок
+          <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg> Журнал
         </button>
         <button class="tab-btn" data-tab="gazebos" onclick="switchTab('gazebos')">
-          <svg class="icon icon-sm"><use href="#ic-home"/></svg> Список беседок
+          <svg class="icon icon-sm"><use href="#ic-home"/></svg> Беседки
+        </button>
+        <button class="tab-btn tab-occupied" data-tab="occupied" onclick="switchTab('occupied')">
+          <svg class="icon icon-sm"><use href="#ic-star"/></svg> Занято
         </button>
       </div>
 
-      <!-- Journal view -->
-      <div class="journal-wrap" id="journalWrap">
-      <div class="toolbar">
-        <input type="date" class="input input-date" id="dateFilter" onchange="applyFilters()" title="Фильтр по дате">
+      <!-- Shared toolbar -->
+      <div class="toolbar" id="mainToolbar">
+        <input type="date" class="input input-date" id="dateFilter" onchange="onDateChange()" title="Фильтр по дате">
         <input type="text" class="input input-search" id="searchInput" placeholder="Поиск по имени, телефону, авто..." oninput="applyFilters()">
         <div class="toolbar-spacer"></div>
         <span class="result-count" id="resultCount">Найдено: <strong>0</strong></span>
       </div>
 
+      <!-- Journal view -->
+      <div class="journal-wrap active" id="journalWrap">
       <!-- Desktop Table -->
       <div class="table-wrap" id="tableWrap">
         <div class="table-scroll">
@@ -948,16 +956,32 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
 
       <!-- Gazebo grid view -->
       <div class="gazebo-grid-wrap" id="gazeboGridWrap">
-        <div class="toolbar">
-          <input type="date" class="input input-date" id="gazeboDateFilter" onchange="renderGazeboGrid()" title="Дата для проверки занятости">
-          <span style="font-size:12px;color:var(--c-text-3);margin-left:4px">— дата проверки занятости</span>
-          <div class="toolbar-spacer"></div>
-        </div>
         <div class="gazebo-grid-header">
           <span class="title">Все беседки</span>
           <span class="summary" id="gazeboSummary">Загружается...</span>
         </div>
         <div class="gazebo-grid" id="gazeboGrid"></div>
+      </div>
+
+      <!-- Occupied tab view -->
+      <div class="occupied-wrap" id="occupiedWrap">
+        <div class="card">
+          <div class="card-head">
+            <h3><span class="pulse"></span> Занятые беседки</h3>
+            <span class="badge" id="occBadge">0</span>
+          </div>
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="stat-val" id="occStatToday">0</div>
+              <div class="stat-lbl">Сегодня</div>
+            </div>
+            <div class="stat-item warn">
+              <div class="stat-val" id="occStatTotal">0</div>
+              <div class="stat-lbl">Всего заявок</div>
+            </div>
+          </div>
+          <div class="gazebo-list" id="occGazeboList"></div>
+        </div>
       </div>
     </main>
   </div>
@@ -1324,25 +1348,28 @@ function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.toggle('active',b.dataset.tab===tab)});
   var jw=document.getElementById('journalWrap');
   var gw=document.getElementById('gazeboGridWrap');
-  if(tab==='journal'){
-    jw.classList.remove('hidden');
-    gw.classList.remove('active');
-    // Sync date back
-    document.getElementById('dateFilter').value=document.getElementById('gazeboDateFilter').value;
-    applyFilters();
-  }else{
-    jw.classList.add('hidden');
-    gw.classList.add('active');
-    // Sync date from journal & init grid
-    var df=document.getElementById('dateFilter').value||getTodayISO();
-    document.getElementById('gazeboDateFilter').value=df;
-    renderGazeboGrid();
-  }
+  var ow=document.getElementById('occupiedWrap');
+  var si=document.getElementById('searchInput');
+  var rc=document.getElementById('resultCount');
+  jw.classList.toggle('active',tab==='journal');
+  gw.classList.toggle('active',tab==='gazebos');
+  ow.classList.toggle('active',tab==='occupied');
+  si.style.display=tab==='journal'?'':'none';
+  rc.style.display=tab==='journal'?'':'none';
+  if(tab==='journal'){applyFilters()}
+  else if(tab==='gazebos'){renderGazeboGrid()}
+  else if(tab==='occupied'){renderOccupiedTab()}
+}
+
+function onDateChange(){
+  if(currentTab==='journal')applyFilters();
+  else if(currentTab==='gazebos')renderGazeboGrid();
+  else if(currentTab==='occupied')renderOccupiedTab();
 }
 
 function renderGazeboGrid(){
   var all=_bookings;
-  var df=document.getElementById('gazeboDateFilter').value||getTodayISO();
+  var df=document.getElementById('dateFilter').value||getTodayISO();
   var occupiedMap={};
   all.filter(function(b){return b.date===df}).forEach(function(b){
     occupiedMap[b.gazeboNumber.trim().toLowerCase()]=b;
@@ -1366,14 +1393,36 @@ function renderGazeboGrid(){
     'Занято: <strong>'+occ+'</strong> &nbsp;·&nbsp; Свободно: <strong>'+free+'</strong> &nbsp;·&nbsp; Всего: <strong>'+SORTED_GAZEBOS.length+'</strong>';
 }
 
-// Sync gazebo date when journal date changes
+function renderOccupiedTab(){
+  var all=_bookings;
+  var df=document.getElementById('dateFilter').value||getTodayISO();
+  var dateB=all.filter(function(b){return b.date===df});
+  var todayCount=all.filter(function(b){return b.date===getTodayISO()}).length;
+  document.getElementById('occStatToday').textContent=todayCount;
+  document.getElementById('occStatTotal').textContent=all.length;
+  document.getElementById('occBadge').textContent=dateB.length;
+  var list=document.getElementById('occGazeboList');
+  if(!dateB.length){
+    list.innerHTML='<div class="empty-state"><span class="emoji">✅</span>Все беседки свободны</div>';
+  }else{
+    dateB.sort(function(a,b){return(parseInt(a.gazeboNumber)||0)-(parseInt(b.gazeboNumber)||0)});
+    list.innerHTML=dateB.map(function(b){
+      return'<div class="gazebo-item">'+
+        '<div class="gazebo-num">'+b.gazeboNumber+'</div>'+
+        '<div class="gazebo-detail">'+
+          '<div class="name">'+b.clientName+'</div>'+
+          '<div class="meta"><span>🕐 '+b.time+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
+        '</div></div>';
+    }).join('');
+  }
+}
+
+// Sync dates across tabs
 var origApplyFilters=applyFilters;
 applyFilters=function(){
   origApplyFilters();
-  if(currentTab==='gazebos'){
-    document.getElementById('gazeboDateFilter').value=document.getElementById('dateFilter').value||getTodayISO();
-    renderGazeboGrid();
-  }
+  if(currentTab==='gazebos')renderGazeboGrid();
+  else if(currentTab==='occupied')renderOccupiedTab();
 };
 
 // Render
@@ -1381,7 +1430,8 @@ function renderAll(){
   var bs=getFiltered();
   renderTable(bs);renderCards(bs);renderOccupied();updateArrows();
   document.getElementById('resultCount').innerHTML='Найдено: <strong>'+bs.length+'</strong>';
-  if(currentTab==='gazebos') renderGazeboGrid();
+  if(currentTab==='gazebos')renderGazeboGrid();
+  if(currentTab==='occupied')renderOccupiedTab();
 }
 
 function renderTable(bs){
