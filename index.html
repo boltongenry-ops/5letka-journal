@@ -347,6 +347,9 @@ tbody tr:last-child td{border-bottom:none}
   content:'';position:absolute;left:0;top:7px;bottom:7px;
   width:3px;border-radius:0 3px 3px 0;background:var(--c-primary);
 }
+.row-expired{background:var(--c-danger-l)!important;color:var(--c-danger-d)}
+.row-expired td{color:var(--c-danger-d)}
+.row-expired:hover{background:var(--c-danger-b)!important}
 
 td.gazebo-cell{font-weight:700;color:var(--c-text)}
 td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px}
@@ -370,6 +373,7 @@ td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px
 }
 .booking-card:active{transform:scale(.985)}
 .booking-card.today{border-color:var(--c-today-b);background:var(--c-today)}
+.booking-card.expired{border-color:var(--c-danger-b);background:var(--c-danger-l);opacity:.85}
 .booking-card-head{
   display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;
 }
@@ -623,6 +627,10 @@ select.form-input{cursor:pointer;appearance:none;background-image:url("data:imag
 /* Tab panels */
 .journal-wrap,.gazebo-grid-wrap,.occupied-wrap{display:none}
 .journal-wrap.active,.gazebo-grid-wrap.active,.occupied-wrap.active{display:block}
+
+.archive-wrap{display:none}
+.archive-wrap.active{display:block}
+.archive-wrap .empty-state{padding:40px 20px}
 
 .occupied-wrap .card{border:2px solid var(--c-warning-b)}
 
@@ -925,6 +933,9 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
         <button class="tab-btn tab-occupied" data-tab="occupied" onclick="switchTab('occupied')">
           <svg class="icon icon-sm"><use href="#ic-star"/></svg> Занято
         </button>
+        <button class="tab-btn tab-archive" data-tab="archive" onclick="switchTab('archive')">
+          <svg class="icon icon-sm"><use href="#ic-trash"/></svg> Архив
+        </button>
       </div>
 
       <!-- Shared toolbar -->
@@ -991,6 +1002,11 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
           </div>
           <div class="gazebo-list" id="occGazeboList"></div>
         </div>
+      </div>
+
+      <!-- Archive tab view -->
+      <div class="archive-wrap" id="archiveWrap">
+        <div class="gazebo-list" id="archiveList"></div>
       </div>
     </main>
   </div>
@@ -1192,16 +1208,16 @@ function showToast(msg,type){
 var pendingDeleteId=null;
 function openConfirm(id,name,gazebo){
   pendingDeleteId=id;
-  document.getElementById('confirmText').textContent='Заявка: '+name+' / Беседка №'+gazebo;
+  document.getElementById('confirmText').textContent='Заявка: '+name+' / Беседка №'+gazebo+'\nБудет перемещена в архив';
   document.getElementById('confirmOverlay').classList.add('active');
 }
 function closeConfirm(){pendingDeleteId=null;document.getElementById('confirmOverlay').classList.remove('active')}
 document.getElementById('confirmDeleteBtn').addEventListener('click',function(){
   if(!pendingDeleteId)return;
-  db.collection('bookings').doc(pendingDeleteId).delete().then(function(){
-    showToast('Заявка удалена');
+  db.collection('bookings').doc(pendingDeleteId).set({deleted:true},{merge:true}).then(function(){
+    showToast('Заявка перемещена в архив');
   }).catch(function(err){
-    showToast('Ошибка удаления','error');console.error(err);
+    showToast('Ошибка','error');console.error(err);
   });
   closeConfirm();
 });
@@ -1269,6 +1285,7 @@ function handleSubmit(e){
       clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay,duration:dur
     },{merge:true}).then(function(){
       showToast('Заявка обновлена');
+      closeModal();
     }).catch(function(err){
       showToast('Ошибка сохранения','error');console.error(err);
     });
@@ -1278,11 +1295,11 @@ function handleSubmit(e){
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     }).then(function(){
       showToast('Заявка создана');
+      closeModal();
     }).catch(function(err){
       showToast('Ошибка создания','error');console.error(err);
     });
   }
-  closeModal();
 }
 
 document.getElementById('gazeboNumber').addEventListener('input',function(){
@@ -1340,6 +1357,13 @@ function updateEndTime(){
   display.style.borderColor=end?'var(--c-primary)':'var(--c-primary-l)';
 }
 
+function isBookingExpired(b){
+  if(!b.duration)return false;
+  var d=new Date(b.date+'T'+b.time);
+  d.setHours(d.getHours()+parseInt(b.duration));
+  return d<new Date();
+}
+
 // Sort
 var sortField='date',sortDir='asc';
 function toggleSort(field){
@@ -1349,7 +1373,7 @@ function toggleSort(field){
 
 // Filters
 function getFiltered(){
-  var bs=_bookings;
+  var bs=_bookings.filter(function(b){return!b.deleted});
   var df=document.getElementById('dateFilter').value;
   if(df)bs=bs.filter(function(b){return b.date===df});
   var s=document.getElementById('searchInput').value.trim().toLowerCase();
@@ -1372,6 +1396,10 @@ function clearFilters(){
   document.getElementById('dateFilter').value='';
   document.getElementById('searchInput').value='';
   sortField='date';sortDir='asc';renderAll();
+}
+
+function getArchived(){
+  return _bookings.filter(function(b){return b.deleted||isBookingExpired(b)});
 }
 
 // ===== Gazebo List =====
@@ -1397,30 +1425,34 @@ function switchTab(tab){
   var jw=document.getElementById('journalWrap');
   var gw=document.getElementById('gazeboGridWrap');
   var ow=document.getElementById('occupiedWrap');
+  var aw=document.getElementById('archiveWrap');
   var si=document.getElementById('searchInput');
   var rc=document.getElementById('resultCount');
   jw.classList.toggle('active',tab==='journal');
   gw.classList.toggle('active',tab==='gazebos');
   ow.classList.toggle('active',tab==='occupied');
+  aw.classList.toggle('active',tab==='archive');
   si.style.visibility=tab==='journal'?'visible':'hidden';
   si.style.opacity=tab==='journal'?'1':'0';
   rc.style.visibility=tab==='journal'?'visible':'hidden';
   if(tab==='journal'){applyFilters()}
   else if(tab==='gazebos'){renderGazeboGrid()}
   else if(tab==='occupied'){renderOccupiedTab()}
+  else if(tab==='archive'){renderArchiveTab()}
 }
 
 function onDateChange(){
   if(currentTab==='journal')applyFilters();
   else if(currentTab==='gazebos')renderGazeboGrid();
   else if(currentTab==='occupied')renderOccupiedTab();
+  else if(currentTab==='archive')renderArchiveTab();
 }
 
 function renderGazeboGrid(){
   var all=_bookings;
   var df=document.getElementById('dateFilter').value||getTodayISO();
   var occupiedMap={};
-  all.filter(function(b){return b.date===df}).forEach(function(b){
+  all.filter(function(b){return b.date===df&&!b.deleted&&!isBookingExpired(b)}).forEach(function(b){
     occupiedMap[b.gazeboNumber.trim().toLowerCase()]=b;
   });
 
@@ -1445,7 +1477,7 @@ function renderGazeboGrid(){
 }
 
 function renderOccupiedTab(){
-  var all=_bookings;
+  var all=_bookings.filter(function(b){return!b.deleted&&!isBookingExpired(b)});
   var df=document.getElementById('dateFilter').value||getTodayISO();
   var dateB=all.filter(function(b){return b.date===df});
   var todayCount=all.filter(function(b){return b.date===getTodayISO()}).length;
@@ -1469,12 +1501,35 @@ function renderOccupiedTab(){
   }
 }
 
+function renderArchiveTab(){
+  var archive=getArchived();
+  var df=document.getElementById('dateFilter').value;
+  if(df)archive=archive.filter(function(b){return b.date===df});
+  archive.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time)});
+  var list=document.getElementById('archiveList');
+  if(!archive.length){
+    list.innerHTML='<div class="empty-state"><span class="emoji">📦</span>Архив пуст</div>';
+  }else{
+    list.innerHTML=archive.map(function(b){
+      var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
+      var label=b.deleted?'🗑 Удалена':'✅ Завершена';
+      return'<div class="gazebo-item'+(b.deleted?'':' expired')+'">'+
+        '<div class="gazebo-num" style="background:linear-gradient(135deg,'+(b.deleted?'#999,#777':'var(--c-danger),var(--c-danger-d))')+')">'+b.gazeboNumber+'</div>'+
+        '<div class="gazebo-detail">'+
+          '<div class="name">'+b.clientName+' <span style="font-size:10px;color:var(--c-text-3)">'+label+'</span></div>'+
+          '<div class="meta"><span>📅 '+fmtDate(b.date)+' '+b.time+'</span>'+ (endStr?'<span>🕐 до '+endStr+'</span>':'') +'</div>'+
+        '</div></div>';
+    }).join('');
+  }
+}
+
 // Sync dates across tabs
 var origApplyFilters=applyFilters;
 applyFilters=function(){
   origApplyFilters();
   if(currentTab==='gazebos')renderGazeboGrid();
   else if(currentTab==='occupied')renderOccupiedTab();
+  else if(currentTab==='archive')renderArchiveTab();
 };
 
 // Render
@@ -1484,6 +1539,7 @@ function renderAll(){
   document.getElementById('resultCount').innerHTML='Найдено: <strong>'+bs.length+'</strong>';
   if(currentTab==='gazebos')renderGazeboGrid();
   if(currentTab==='occupied')renderOccupiedTab();
+  if(currentTab==='archive')renderArchiveTab();
 }
 
 function renderTable(bs){
@@ -1491,7 +1547,7 @@ function renderTable(bs){
   if(!bs.length){t.innerHTML='<tr><td colspan="9"><div class="empty-state"><span class="emoji">📋</span>Нет заявок</div></td></tr>';return}
   var today=getTodayISO();
   t.innerHTML=bs.map(function(b){
-    var cls=b.date===today?' row-today':'';
+    var cls=(b.date===today?' row-today':'')+(isBookingExpired(b)?' row-expired':'');
     var phoneEsc=b.phone.replace(/'/g,"\\'");
     var nameEsc=b.clientName.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
@@ -1518,9 +1574,10 @@ function renderCards(bs){
   var today=getTodayISO();
   c.innerHTML=bs.map(function(b){
     var isToday=b.date===today;
+    var isExpired=isBookingExpired(b);
     var phoneEsc=b.phone.replace(/'/g,"\\'");
     var nameEsc=b.clientName.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    return'<div class="booking-card'+(isToday?' today':'')+'">'+
+    return'<div class="booking-card'+(isToday?' today':'')+(isExpired?' expired':'')+'">'+
       '<div class="booking-card-head">'+
         '<div class="booking-card-date">'+
           '<svg class="icon icon-sm"><use href="#ic-calendar"></use></svg>'+
@@ -1550,7 +1607,7 @@ function updateArrows(){
 }
 
 function renderOccupied(){
-  var all=_bookings;
+  var all=_bookings.filter(function(b){return!b.deleted&&!isBookingExpired(b)});
   var df=document.getElementById('dateFilter').value||getTodayISO();
   var dateB=all.filter(function(b){return b.date===df});
   var todayCount=all.filter(function(b){return b.date===getTodayISO()}).length;
