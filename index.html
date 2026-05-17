@@ -297,7 +297,21 @@ img,svg{display:block}
 }
 .gazebo-detail{flex:1;min-width:0}
 .gazebo-detail .name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gazebo-detail .meta{font-size:11px;color:var(--c-text-3);display:flex;gap:10px;margin-top:2px}
+.gazebo-detail .meta{font-size:11px;color:var(--c-text-3);display:flex;gap:10px;margin-top:2px;flex-wrap:wrap}
+.gazebo-detail .meta span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
+.gazebo-item.future{background:var(--c-warning-l);border-color:var(--c-warning-b)}
+.gazebo-item.future .gazebo-num{background:linear-gradient(135deg,var(--c-accent),var(--c-warning))!important}
+.gazebo-card-link.future{background:var(--c-warning-l);border-color:var(--c-warning);opacity:.9!important;filter:none!important}
+.gazebo-card-link.future .num{color:var(--c-warning)!important}
+.gazebo-card-link.future .icon{color:var(--c-warning)!important}
+
+.gazebo-item .archive-del{
+  width:28px;height:28px;border-radius:6px;border:none;background:transparent;
+  color:var(--c-text-3);cursor:pointer;flex-shrink:0;font-size:16px;
+  display:flex;align-items:center;justify-content:center;transition:all var(--t-fast);
+}
+.gazebo-item .archive-del:hover{background:var(--c-danger-l);color:var(--c-danger);transform:scale(1.1)}
 
 .empty-state{
   text-align:center;padding:30px 20px;color:var(--c-text-3);font-size:13px;line-height:1.6;
@@ -1364,6 +1378,17 @@ function isBookingExpired(b){
   return d<new Date();
 }
 
+function isBookingFuture(b){return b.date>getTodayISO()}
+
+function deletePermanently(id){
+  if(!confirm('Удалить запись безвозвратно?'))return;
+  db.collection('bookings').doc(id).delete().then(function(){
+    showToast('Запись удалена');
+  }).catch(function(err){
+    showToast('Ошибка','error');console.error(err);
+  });
+}
+
 // Sort
 var sortField='date',sortDir='asc';
 function toggleSort(field){
@@ -1460,9 +1485,9 @@ function renderGazeboGrid(){
   var html=SORTED_GAZEBOS.map(function(num){
     var ob=occupiedMap[num.trim().toLowerCase()];
     if(ob){occ++}else{free++}
-    var cls=ob?' occupied':'';
+    var cls=ob?(isBookingFuture(ob)?' future':' occupied'):'';
     var clientName=ob?ob.clientName:'';
-    var endStr=ob&&ob.duration?'<span class="client">До '+calcEndTime(ob.date,ob.time,ob.duration)+'</span>':'';
+    var endStr=ob&&ob.duration?'<span class="client">'+ (isBookingFuture(ob)?'c '+fmtDate(ob.date)+' до ':'До ')+calcEndTime(ob.date,ob.time,ob.duration)+'</span>':'';
     return'<div class="gazebo-card-link'+cls+'">'+
       '<svg class="icon" style="width:22px;height:22px"><use href="#ic-home"/></svg>'+
       '<span class="num">'+num+'</span>'+
@@ -1490,12 +1515,14 @@ function renderOccupiedTab(){
   }else{
     dateB.sort(function(a,b){return(parseInt(a.gazeboNumber)||0)-(parseInt(b.gazeboNumber)||0)});
     list.innerHTML=dateB.map(function(b){
-      var endStr=b.duration?' → '+calcEndTime(b.date,b.time,b.duration):'';
-      return'<div class="gazebo-item">'+
+      var isFuture=isBookingFuture(b);
+      var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
+      var timeDisplay=isFuture?'с '+fmtDate(b.date)+(endStr?' по '+endStr:' по '+b.date+' '+b.time):'🕐 '+b.time+(endStr?' → '+endStr:'');
+      return'<div class="gazebo-item'+ (isFuture?' future':'') +'">'+
         '<div class="gazebo-num">'+b.gazeboNumber+'</div>'+
         '<div class="gazebo-detail">'+
           '<div class="name">'+b.clientName+'</div>'+
-          '<div class="meta"><span>🕐 '+b.time+endStr+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
+          '<div class="meta"><span>'+timeDisplay+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
         '</div></div>';
     }).join('');
   }
@@ -1513,12 +1540,15 @@ function renderArchiveTab(){
     list.innerHTML=archive.map(function(b){
       var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
       var label=b.deleted?'🗑 Удалена':'✅ Завершена';
+      var nameEsc=b.clientName.replace(/'/g,"\\'").replace(/"/g,'&quot;');
       return'<div class="gazebo-item'+(b.deleted?'':' expired')+'">'+
         '<div class="gazebo-num" style="background:linear-gradient(135deg,'+(b.deleted?'#999,#777':'var(--c-danger),var(--c-danger-d))')+')">'+b.gazeboNumber+'</div>'+
         '<div class="gazebo-detail">'+
           '<div class="name">'+b.clientName+' <span style="font-size:10px;color:var(--c-text-3)">'+label+'</span></div>'+
           '<div class="meta"><span>📅 '+fmtDate(b.date)+' '+b.time+'</span>'+ (endStr?'<span>🕐 до '+endStr+'</span>':'') +'</div>'+
-        '</div></div>';
+        '</div>'+
+        '<button class="archive-del" title="Удалить навсегда" onclick="event.stopPropagation();deletePermanently(\''+b.id+'\')">✕</button>'+
+      '</div>';
     }).join('');
   }
 }
@@ -1623,12 +1653,14 @@ function renderOccupied(){
   }else{
     dateB.sort(function(a,b){return(parseInt(a.gazeboNumber)||0)-(parseInt(b.gazeboNumber)||0)});
     list.innerHTML=dateB.map(function(b){
-      var endStr=b.duration?' → '+calcEndTime(b.date,b.time,b.duration):'';
-      return'<div class="gazebo-item">'+
+      var isFuture=isBookingFuture(b);
+      var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
+      var timeDisplay=isFuture?'с '+fmtDate(b.date)+(endStr?' по '+endStr:' по '+b.date+' '+b.time):'🕐 '+b.time+(endStr?' → '+endStr:'');
+      return'<div class="gazebo-item'+ (isFuture?' future':'') +'">'+
         '<div class="gazebo-num">'+b.gazeboNumber+'</div>'+
         '<div class="gazebo-detail">'+
           '<div class="name">'+b.clientName+'</div>'+
-          '<div class="meta"><span>🕐 '+b.time+endStr+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
+          '<div class="meta"><span>'+timeDisplay+'</span><span>🚗 '+fmtCar(b.carNumber)+'</span></div>'+
         '</div></div>';
     }).join('');
   }
