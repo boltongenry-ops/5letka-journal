@@ -588,12 +588,9 @@ select.form-input{cursor:pointer;appearance:none;background-image:url("data:imag
 .gazebo-grid-header .summary strong{color:var(--c-primary);font-weight:700}
 .gazebo-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(85px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(85px,120px));
   gap:10px;
   justify-content:center;
-}
-@media(min-width:769px){
-  .gazebo-grid{grid-template-columns:repeat(auto-fill,minmax(85px,120px))}
 }
 .gazebo-card-link{
   text-decoration:none;display:block;
@@ -1405,8 +1402,9 @@ function switchTab(tab){
   jw.classList.toggle('active',tab==='journal');
   gw.classList.toggle('active',tab==='gazebos');
   ow.classList.toggle('active',tab==='occupied');
-  si.style.display=tab==='journal'?'':'none';
-  rc.style.display=tab==='journal'?'':'none';
+  si.style.visibility=tab==='journal'?'visible':'hidden';
+  si.style.opacity=tab==='journal'?'1':'0';
+  rc.style.visibility=tab==='journal'?'visible':'hidden';
   if(tab==='journal'){applyFilters()}
   else if(tab==='gazebos'){renderGazeboGrid()}
   else if(tab==='occupied'){renderOccupiedTab()}
