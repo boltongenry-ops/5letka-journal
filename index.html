@@ -590,6 +590,10 @@ select.form-input{cursor:pointer;appearance:none;background-image:url("data:imag
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(85px,1fr));
   gap:10px;
+  justify-content:center;
+}
+@media(min-width:769px){
+  .gazebo-grid{grid-template-columns:repeat(auto-fill,minmax(85px,120px))}
 }
 .gazebo-card-link{
   text-decoration:none;display:block;
