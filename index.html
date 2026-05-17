@@ -300,11 +300,16 @@ img,svg{display:block}
 .gazebo-detail .meta{font-size:11px;color:var(--c-text-3);display:flex;gap:10px;margin-top:2px;flex-wrap:wrap}
 .gazebo-detail .meta span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 
-.gazebo-item.future{background:var(--c-warning-l);border-color:var(--c-warning-b)}
-.gazebo-item.future .gazebo-num{background:linear-gradient(135deg,var(--c-accent),var(--c-warning))!important}
-.gazebo-card-link.future{background:var(--c-warning-l);border-color:var(--c-warning);opacity:.9!important;filter:none!important}
-.gazebo-card-link.future .num{color:var(--c-warning)!important}
-.gazebo-card-link.future .icon{color:var(--c-warning)!important}
+.gazebo-item.future{background:#fff8e1;border-color:#f0c000}
+.gazebo-item.future .gazebo-num{background:linear-gradient(135deg,#f5b800,#e0a000)!important}
+.sidebar .gazebo-item.future{background:rgba(240,180,0,.18);border-color:rgba(240,180,0,.35)}
+
+.gazebo-card-link.future{
+  background:#fff8e1;border-color:#f0c000;opacity:1!important;filter:none!important
+}
+.gazebo-card-link.future .num{color:#c88800!important}
+.gazebo-card-link.future .icon{color:#d49000!important}
+.gazebo-card-link.future .client{color:#b87800}
 
 .gazebo-item .archive-del{
   width:28px;height:28px;border-radius:6px;border:none;background:transparent;
