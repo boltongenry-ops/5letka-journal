@@ -933,6 +933,7 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
                 <th>Клиент</th>
                 <th>Телефон</th>
                 <th>Авто</th>
+                <th>Предоплата</th>
                 <th style="width:100px">Действия</th>
               </tr>
             </thead>
@@ -982,9 +983,8 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
           <input type="text" class="form-input" id="clientName" placeholder="Иван Петров" required autocomplete="off">
         </div>
         <div class="form-group">
-          <label>Телефон <span class="req">*</span></label>
-          <input type="tel" class="form-input" id="phone" placeholder="+7 (916) 123-45-67" required>
-          <div class="form-hint">Формат: +7 (XXX) XXX-XX-XX</div>
+          <label>Телефон</label>
+          <input type="tel" class="form-input" id="phone" placeholder="+7 (916) 123-45-67">
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -1001,10 +1001,15 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
           <label>Дата заезда <span class="req">*</span></label>
           <input type="date" class="form-input" id="checkInDate" required>
         </div>
-        <div class="form-group">
-          <label>Номер автомобиля</label>
-          <input type="text" class="form-input" id="carNumber" placeholder="А123БВ 777" required>
-          <div class="form-hint">Формат: А000АА 000</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Номер автомобиля</label>
+            <input type="text" class="form-input" id="carNumber" placeholder="А123БВ 777">
+          </div>
+          <div class="form-group">
+            <label>Сумма предоплаты</label>
+            <input type="text" class="form-input" id="prepay" placeholder="5000 ₽" inputmode="numeric">
+          </div>
         </div>
       </div>
       <div class="modal-foot">
@@ -1167,6 +1172,7 @@ function openModal(editId){
       document.getElementById('checkInDate').value=b.date;
       document.getElementById('checkInTime').value=b.time;
       document.getElementById('carNumber').value=b.carNumber||'';
+      document.getElementById('prepay').value=b.prepay||'';
       document.getElementById('gazeboError').style.display='none';
     }
   }else{
@@ -1194,8 +1200,9 @@ function handleSubmit(e){
   var date=document.getElementById('checkInDate').value;
   var time=document.getElementById('checkInTime').value;
   var car=document.getElementById('carNumber').value.trim();
+  var prepay=document.getElementById('prepay').value.trim();
 
-  if(!name||!phone||!gazebo||!date||!time){showToast('Заполните все поля','error');return}
+  if(!name||!gazebo||!date||!time){showToast('Заполните обязательные поля','error');return}
   if(isGazeboConflict(gazebo,date,editId||undefined)){
     document.getElementById('gazeboError').style.display='block';
     document.getElementById('gazeboNumber').classList.add('input-err');
@@ -1206,7 +1213,7 @@ function handleSubmit(e){
 
   if(editId){
     db.collection('bookings').doc(editId).set({
-      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car
+      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay
     },{merge:true}).then(function(){
       showToast('Заявка обновлена');
     }).catch(function(err){
@@ -1214,7 +1221,7 @@ function handleSubmit(e){
     });
   }else{
     db.collection('bookings').add({
-      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,
+      clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     }).then(function(){
       showToast('Заявка создана');
@@ -1379,7 +1386,7 @@ function renderAll(){
 
 function renderTable(bs){
   var t=document.getElementById('tableBody');
-  if(!bs.length){t.innerHTML='<tr><td colspan="7"><div class="empty-state"><span class="emoji">📋</span>Нет заявок</div></td></tr>';return}
+  if(!bs.length){t.innerHTML='<tr><td colspan="8"><div class="empty-state"><span class="emoji">📋</span>Нет заявок</div></td></tr>';return}
   var today=getTodayISO();
   t.innerHTML=bs.map(function(b){
     var cls=b.date===today?' row-today':'';
@@ -1393,6 +1400,7 @@ function renderTable(bs){
       '<td class="phone-cell">'+fmtPhone(b.phone)+
         '<button class="copy-btn" title="Копировать" onclick="copyPhone(\''+phoneEsc+'\')"><svg class="icon icon-sm"><use href=\'#ic-copy\'></use></svg></button></td>'+
       '<td>'+fmtCar(b.carNumber)+'</td>'+
+      '<td>'+(b.prepay||'')+'</td>'+
       '<td><div class="actions-inline">'+
         '<button class="btn btn-outline btn-xs" onclick="openModal(\''+b.id+'\')" title="Изменить"><svg class="icon icon-sm"><use href=\'#ic-edit\'></use></svg></button>'+
         '<button class="btn btn-danger btn-xs" onclick="openConfirm(\''+b.id+'\',\''+nameEsc+'\',\''+b.gazeboNumber+'\')" title="Удалить"><svg class="icon icon-sm"><use href=\'#ic-trash\'></use></svg></button>'+
@@ -1422,6 +1430,7 @@ function renderCards(bs){
       '<div class="booking-card-row"><span class="label"><svg class="icon icon-sm"><use href="#ic-phone"></use></svg></span><span class="value mono">'+fmtPhone(b.phone)+
         '<button class="copy-btn" onclick="copyPhone(\''+phoneEsc+'\')"><svg class="icon icon-sm"><use href=\'#ic-copy\'></use></svg></button></span></div>'+
       '<div class="booking-card-row"><span class="label"><svg class="icon icon-sm"><use href="#ic-car"></use></svg></span><span class="value mono">'+fmtCar(b.carNumber)+'</span></div>'+
+      (b.prepay?'<div class="booking-card-row"><span class="label"><svg class="icon icon-sm"><use href="#ic-star"></use></svg></span><span class="value mono">Предоплата: '+b.prepay+'</span></div>':'')+
       '<div class="booking-card-actions">'+
         '<button class="btn btn-outline" style="flex:1" onclick="openModal(\''+b.id+'\')"><svg class="icon icon-sm"><use href=\'#ic-edit\'></use></svg> Изменить</button>'+
         '<button class="btn btn-danger" style="flex:1" onclick="openConfirm(\''+b.id+'\',\''+nameEsc+'\',\''+b.gazeboNumber+'\')"><svg class="icon icon-sm"><use href=\'#ic-trash\'></use></svg> Удалить</button>'+
@@ -1482,9 +1491,9 @@ function copyPhone(phone){
 function exportCSV(){
   var bs=getFiltered();
   if(!bs.length){showToast('Нет данных для экспорта','error');return}
-  var h='Дата;Время;Беседка;Клиент;Телефон;Автомобиль\n';
+  var h='Дата;Время;Беседка;Клиент;Телефон;Автомобиль;Предоплата\n';
   var rows=bs.map(function(b){
-    return [fmtDate(b.date),b.time,'№'+b.gazeboNumber,b.clientName,b.phone,b.carNumber]
+    return [fmtDate(b.date),b.time,'№'+b.gazeboNumber,b.clientName,b.phone,b.carNumber,b.prepay||'']
       .map(function(v){return'"'+String(v).replace(/"/g,'""')+'"'}).join(';');
   }).join('\n');
   var blob=new Blob(['\uFEFF'+h+rows],{type:'text/csv;charset=utf-8'});
