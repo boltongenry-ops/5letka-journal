@@ -833,10 +833,8 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
     <div class="header-left">
       <div class="logo-wrap">
         <!-- Replace with your logo.jpg in the same folder -->
-        <img src="logo.jpg" alt="5letka"
-             onerror="this.classList.add('hide');this.nextElementSibling.style.display='flex'"
-             style="width:100%;height:100%;object-fit:cover">
-        <div class="logo-fallback" style="display:none">🎣</div>
+        <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="logo" style="display:none">
+        <div class="logo-fallback">🎣</div>
       </div>
       <div class="header-text">
         <h1>Журнал заявок</h1>
@@ -1102,7 +1100,7 @@ var _bookings = [];
 var _bookingsReady = false;
 
 // Real-time listener
-db.collection('bookings').orderBy('date').orderBy('time').onSnapshot(function(snapshot){
+db.collection('bookings').orderBy('date').onSnapshot(function(snapshot){
   _bookings = [];
   snapshot.forEach(function(doc){
     var d = doc.data();
