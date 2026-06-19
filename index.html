@@ -659,6 +659,15 @@ select.form-input{cursor:pointer;appearance:none;background-image:url("data:imag
   font-size:10px;color:var(--c-text-3);line-height:1.2;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
+.gz-count{
+  position:absolute;top:6px;right:6px;z-index:2;
+  min-width:22px;height:22px;padding:0 6px;border-radius:11px;
+  background:var(--c-warning);color:#fff;font-size:11px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px rgba(212,140,12,.35);
+  line-height:1;letter-spacing:-.2px;
+}
+.gz-count.c3{background:var(--c-danger);box-shadow:0 2px 6px rgba(229,72,77,.4)}
 
 /* Occupied gazebo card */
 .gazebo-card-link.occupied{
@@ -1566,26 +1575,37 @@ function onDateChange(){
 function renderGazeboGrid(){
   var all=_bookings;
   var df=document.getElementById('dateFilter').value||getTodayISO();
-  var occupiedMap={},futureMap={};
-  all.filter(function(b){return!b.deleted&&!isBookingExpired(b)}).forEach(function(b){
-    if(b.date===df)occupiedMap[b.gazeboNumber.trim().toLowerCase()]=b;
-    if(b.date!==df&&isBookingFuture(b))futureMap[b.gazeboNumber.trim().toLowerCase()]=b;
+  var nowMin=Math.floor(Date.now()/60000);
+  // Считаем актуальные (bookingEnd > сейчас) брони на выбранную дату по каждой беседке
+  var occupiedList={};
+  var futureList={};
+  all.filter(function(b){return!b.deleted}).forEach(function(b){
+    var key=b.gazeboNumber.trim().toLowerCase();
+    if(b.date===df&&bookingEnd(b)>nowMin){
+      (occupiedList[key]=occupiedList[key]||[]).push(b);
+    }else if(b.date>df&&isBookingFuture(b)){
+      (futureList[key]=futureList[key]||[]).push(b);
+    }
   });
 
   var free=0,occ=0;
   var html=SORTED_GAZEBOS.map(function(num){
     var key=num.trim().toLowerCase();
-    var ob=occupiedMap[key];
-    var fb=futureMap[key];
-    if(ob||fb){occ++}else{free++}
-    var cls=ob?' occupied':(fb?' future':'');
-    var b=ob||fb;
+    var onDate=occupiedList[key];
+    var inFuture=futureList[key];
+    var arr=onDate||inFuture;
+    if(arr&&arr.length){occ++}else{free++}
+    var cls=onDate?' occupied':(inFuture?' future':'');
+    var b=arr&&arr[0];
     var clientName=b?b.clientName:'';
+    var count=arr?arr.length:0;
+    var counter=count>=2?'<span class="gz-count'+(count>=3?' c3':'')+'">'+(count>=3?'3+':count)+'</span>':'';
     var endStr=b&&b.duration?(isBookingFuture(b)?'<span class="client">'+fmtDate(b.date)+' – '+calcEndTime(b.date,b.time,b.duration)+'</span>':'<span class="client">До '+calcEndTime(b.date,b.time,b.duration)+'</span>'):'';
     return'<button type="button" class="gazebo-card-link'+cls+'" onclick="openGazeboDetail(\''+num.replace(/'/g,"\\'")+'\')">'+
+      counter+
       '<svg class="icon" style="width:22px;height:22px"><use href="#ic-home"/></svg>'+
       '<span class="num">'+num+'</span>'+
-      (ob?'<span class="client">'+clientName+'</span>':'')+
+      (onDate?'<span class="client">'+clientName+'</span>':'')+
       endStr+
     '</button>';
   }).join('');
