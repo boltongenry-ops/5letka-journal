@@ -1598,7 +1598,13 @@ function renderGazeboGrid(){
 // Открывает модалку со всеми бронями конкретной беседки
 function openGazeboDetail(num){
   var key=num.trim().toLowerCase();
-  var list=_bookings.filter(function(b){return b.gazeboNumber.trim().toLowerCase()===key})
+  // Только актуальные: дата+время окончания ещё не прошли
+  var nowMin=Math.floor(Date.now()/60000);
+  var list=_bookings.filter(function(b){
+    if(b.gazeboNumber.trim().toLowerCase()!==key)return false;
+    if(b.deleted)return false;
+    return bookingEnd(b)>nowMin;
+  })
     .sort(function(a,b){
       var ca=a.date+a.time, cb=b.date+b.time;
       return ca<cb?-1:ca>cb?1:0;
@@ -1606,7 +1612,7 @@ function openGazeboDetail(num){
   document.getElementById('gazeboDetailTitle').textContent='Беседка №'+num;
   var body=document.getElementById('gazeboDetailBody');
   if(!list.length){
-    body.innerHTML='<div class="empty-state"><span class="emoji">✅</span><strong>Бронирований нет</strong><br>все время свободно</div>';
+    body.innerHTML='<div class="empty-state"><span class="emoji">✅</span><strong>Актуальных броней нет</strong><br>всё время свободно</div>';
   }else{
     body.innerHTML=list.map(function(b){
       var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
