@@ -508,6 +508,20 @@ select.form-input{cursor:pointer;appearance:none;background-image:url("data:imag
 .form-row .form-group{flex:1}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:0 28px 24px}
 
+/* ===== Gazebo Detail Booking Items ===== */
+.gz-booking{
+  background:var(--c-surface-a);border:1px solid var(--c-border);
+  border-radius:var(--r);padding:12px 14px;margin-bottom:10px;
+}
+.gz-booking:last-child{margin-bottom:0}
+.gz-booking-head{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin-bottom:8px;flex-wrap:wrap;
+}
+.gz-booking-when{font-size:13px;font-weight:600;color:var(--c-text)}
+.gz-booking-actions{display:flex;gap:6px;flex-shrink:0}
+.gz-booking-body{font-size:12.5px;color:var(--c-text-2);display:flex;flex-direction:column;gap:3px}
+
 /* ===== Confirm Dialog ===== */
 .confirm-overlay{
   display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
@@ -626,13 +640,15 @@ select.form-input{cursor:pointer;appearance:none;background-image:url("data:imag
   justify-content:center;
 }
 .gazebo-card-link{
-  text-decoration:none;display:block;
+  text-decoration:none;display:flex;
   border-radius:var(--r);border:2px solid var(--c-primary-l);
   background:var(--c-primary-ll);padding:14px 8px;
   text-align:center;transition:all var(--t-fast);
   cursor:pointer;min-height:80px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  font-family:inherit;color:inherit;
 }
+.gazebo-card-link:focus-visible{outline:2px solid var(--c-primary);outline-offset:2px}
 .gazebo-card-link:hover{transform:translateY(-2px);box-shadow:var(--s);border-color:var(--c-primary)}
 .gazebo-card-link .num{
   font-size:15px;font-weight:800;color:var(--c-primary-d);
@@ -1128,6 +1144,21 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
   </div>
 </div>
 
+<!-- Gazebo Detail Modal -->
+<div class="modal-overlay" id="gazeboDetailOverlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-head">
+      <h2 id="gazeboDetailTitle">Беседка</h2>
+      <button class="modal-close" onclick="closeGazeboDetail()" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="modal-body" id="gazeboDetailBody" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeGazeboDetail()">Закрыть</button>
+      <button class="btn btn-primary" onclick="createBookingForGazebo()">＋ Забронировать</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast-container" id="toastContainer"></div>
 
@@ -1217,10 +1248,39 @@ db.collection('bookings').orderBy('date').onSnapshot(function(snapshot){
   renderAll();
 });
 
-function isGazeboConflict(gazebo, date, excludeId){
-  return _bookings.some(function(b){
-    return b.id !== excludeId && b.gazeboNumber.trim().toLowerCase() === gazebo.trim().toLowerCase() && b.date === date;
+function toMinutes(date, time){
+  if(!date||!time)return null;
+  return Math.floor(new Date(date+'T'+time+':00').getTime()/60000);
+}
+
+function bookingEnd(b){
+  if(!b.duration)return toMinutes(b.date,b.time)+12*60;
+  return toMinutes(b.date,b.time)+(parseInt(b.duration)||0)*60;
+}
+
+function bookingStart(b){
+  return toMinutes(b.date,b.time);
+}
+
+// Возвращает массив конфликтующих броней (пустой = нет конфликта)
+function getGazeboConflicts(gazebo, date, time, duration, excludeId){
+  if(!gazebo||!date||!time)return [];
+  var gzKey=gazebo.trim().toLowerCase();
+  var startMin=toMinutes(date,time);
+  var endMin=startMin+(parseInt(duration)||12)*60;
+  return _bookings.filter(function(b){
+    if(b.id===excludeId)return false;
+    if(b.gazeboNumber.trim().toLowerCase()!==gzKey)return false;
+    var bStart=bookingStart(b);
+    if(bStart===null)return false;
+    var bEnd=bookingEnd(b);
+    // Пересечение интервалов [startMin, endMin) и [bStart, bEnd)
+    return startMin<bEnd && bStart<endMin;
   });
+}
+
+function isGazeboConflict(gazebo, date, time, duration, excludeId){
+  return getGazeboConflicts(gazebo, date, time, duration, excludeId).length>0;
 }
 
 // Toast
@@ -1302,8 +1362,17 @@ function handleSubmit(e){
   var dur=document.getElementById('duration').value;
 
   if(!name||!gazebo||!date||!time){showToast('Заполните обязательные поля','error');return}
-  if(isGazeboConflict(gazebo,date,editId||undefined)){
-    document.getElementById('gazeboError').style.display='block';
+  var conflicts=getGazeboConflicts(gazebo,date,time,dur,editId||undefined);
+  if(conflicts.length){
+    var msg='Беседка занята: ';
+    conflicts.forEach(function(c,i){
+      if(i)msg+='; ';
+      var endStr=c.duration?calcEndTime(c.date,c.time,c.duration):'';
+      msg+=c.clientName+' ('+c.time+(endStr?'–'+endStr:'')+')';
+    });
+    var errEl=document.getElementById('gazeboError');
+    errEl.textContent=msg;
+    errEl.style.display='block';
     document.getElementById('gazeboNumber').classList.add('input-err');
     return;
   }
@@ -1316,6 +1385,7 @@ function handleSubmit(e){
     },{merge:true}).then(function(){
       showToast('Заявка обновлена');
       closeModal();
+      if(_returnToGazebo)openGazeboDetail(_returnToGazebo);
     }).catch(function(err){
       showToast('Ошибка сохранения','error');console.error(err);
     });
@@ -1326,6 +1396,7 @@ function handleSubmit(e){
     }).then(function(){
       showToast('Заявка создана');
       closeModal();
+      if(_returnToGazebo)openGazeboDetail(_returnToGazebo);
     }).catch(function(err){
       showToast('Ошибка создания','error');console.error(err);
     });
@@ -1340,10 +1411,12 @@ document.getElementById('gazeboNumber').addEventListener('input',function(){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){
     if(document.getElementById('confirmOverlay').classList.contains('active'))closeConfirm();
+    else if(document.getElementById('gazeboDetailOverlay').classList.contains('active'))closeGazeboDetail();
     else if(document.getElementById('modalOverlay').classList.contains('active'))closeModal();
   }
 });
 document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===e.currentTarget)closeModal()});
+document.getElementById('gazeboDetailOverlay').addEventListener('click',function(e){if(e.target===e.currentTarget)closeGazeboDetail()});
 document.getElementById('confirmOverlay').addEventListener('click',function(e){if(e.target===e.currentTarget)closeConfirm()});
 
 // Sidebar toggle
@@ -1459,6 +1532,7 @@ function sortGazebos(arr){
 var SORTED_GAZEBOS=sortGazebos(ALL_GAZEBOS);
 
 var currentTab='journal';
+var _returnToGazebo=null;
 
 function switchTab(tab){
   currentTab=tab;
@@ -1508,17 +1582,69 @@ function renderGazeboGrid(){
     var b=ob||fb;
     var clientName=b?b.clientName:'';
     var endStr=b&&b.duration?(isBookingFuture(b)?'<span class="client">'+fmtDate(b.date)+' – '+calcEndTime(b.date,b.time,b.duration)+'</span>':'<span class="client">До '+calcEndTime(b.date,b.time,b.duration)+'</span>'):'';
-    return'<div class="gazebo-card-link'+cls+'">'+
+    return'<button type="button" class="gazebo-card-link'+cls+'" onclick="openGazeboDetail(\''+num.replace(/'/g,"\\'")+'\')">'+
       '<svg class="icon" style="width:22px;height:22px"><use href="#ic-home"/></svg>'+
       '<span class="num">'+num+'</span>'+
       (ob?'<span class="client">'+clientName+'</span>':'')+
       endStr+
-    '</div>';
+    '</button>';
   }).join('');
 
   document.getElementById('gazeboGrid').innerHTML=html;
   document.getElementById('gazeboSummary').innerHTML=
     'Занято: <strong>'+occ+'</strong> &nbsp;·&nbsp; Свободно: <strong>'+free+'</strong> &nbsp;·&nbsp; Всего: <strong>'+SORTED_GAZEBOS.length+'</strong>';
+}
+
+// Открывает модалку со всеми бронями конкретной беседки
+function openGazeboDetail(num){
+  var key=num.trim().toLowerCase();
+  var list=_bookings.filter(function(b){return b.gazeboNumber.trim().toLowerCase()===key})
+    .sort(function(a,b){
+      var ca=a.date+a.time, cb=b.date+b.time;
+      return ca<cb?-1:ca>cb?1:0;
+    });
+  document.getElementById('gazeboDetailTitle').textContent='Беседка №'+num;
+  var body=document.getElementById('gazeboDetailBody');
+  if(!list.length){
+    body.innerHTML='<div class="empty-state"><span class="emoji">✅</span><strong>Бронирований нет</strong><br>все время свободно</div>';
+  }else{
+    body.innerHTML=list.map(function(b){
+      var endStr=b.duration?calcEndTime(b.date,b.time,b.duration):'';
+      var dateLbl=isBookingFuture(b)?fmtDate(b.date):fmtDate(b.date)+' <span style="color:var(--c-text-3);font-size:10px">сегодня</span>';
+      return'<div class="gz-booking">'+
+        '<div class="gz-booking-head">'+
+          '<div class="gz-booking-when">📅 '+dateLbl+' &nbsp; 🕐 '+b.time+(endStr?' – '+endStr:'')+'</div>'+
+          '<div class="gz-booking-actions">'+
+            '<button class="btn btn-outline btn-xs" onclick="openModal(\''+b.id+'\')">✏️</button>'+
+            '<button class="btn btn-danger btn-xs" onclick="openConfirm(\''+b.id+'\',\''+b.clientName.replace(/'/g,"\\'")+'\',\''+num.replace(/'/g,"\\'")+'\')">🗑️</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="gz-booking-body">'+
+          '<div>👤 <strong>'+b.clientName+'</strong></div>'+
+          '<div>📞 '+b.phone+(b.carNumber?' &nbsp; 🚗 '+b.carNumber:'')+'</div>'+
+          (b.prepay?'<div>💰 '+b.prepay+'</div>':'')+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }
+  document.getElementById('gazeboDetailOverlay').classList.add('active');
+}
+
+function closeGazeboDetail(){
+  document.getElementById('gazeboDetailOverlay').classList.remove('active');
+}
+
+function createBookingForGazebo(){
+  var num=document.getElementById('gazeboDetailTitle').textContent.replace('Беседка №','');
+  var df=document.getElementById('gazeboDateFilter').value||getTodayISO();
+  _returnToGazebo=num;
+  closeGazeboDetail();
+  openModal();
+  setTimeout(function(){
+    document.getElementById('gazeboNumber').value=num;
+    document.getElementById('checkInDate').value=df;
+    updateEndTime();
+  },50);
 }
 
 function renderOccupiedTab(){
