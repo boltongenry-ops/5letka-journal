@@ -17,10 +17,18 @@ self.addEventListener('activate', function(e){
 
 self.addEventListener('fetch', function(e){
   if(e.request.method !== 'GET') return;
+  // Не кешируем запросы не нашего origin (Firebase, иконки по http, и т.д.)
+  var url = new URL(e.request.url);
+  if(url.origin !== self.location.origin) return;
+
   e.respondWith(
     fetch(e.request).then(function(r){
-      var copy = r.clone();
-      caches.open(CACHE).then(function(c){c.put(e.request, copy)});
+      if(r && r.status === 200 && r.type === 'basic'){
+        var copy = r.clone();
+        caches.open(CACHE).then(function(c){
+          c.put(e.request, copy).catch(function(){});
+        });
+      }
       return r;
     }).catch(function(){
       return caches.match(e.request);

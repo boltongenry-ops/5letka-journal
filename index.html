@@ -1651,8 +1651,10 @@ function closeGazeboDetail(){
 }
 
 function createBookingForGazebo(){
-  var num=document.getElementById('gazeboDetailTitle').textContent.replace('Беседка №','');
-  var df=document.getElementById('gazeboDateFilter').value||getTodayISO();
+  var titleEl=document.getElementById('gazeboDetailTitle');
+  if(!titleEl)return;
+  var num=titleEl.textContent.replace('Беседка №','');
+  var df=document.getElementById('dateFilter').value||getTodayISO();
   _returnToGazebo=num;
   closeGazeboDetail();
   openModal();
