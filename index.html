@@ -466,7 +466,8 @@ td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px
 .modal{
   background:var(--c-surface);border-radius:var(--r-xl);
   box-shadow:var(--s-xl);width:100%;max-width:500px;max-height:92vh;
-  overflow-y:auto;animation:modalIn var(--t-slow);
+  display:flex;flex-direction:column;overflow:hidden;
+  animation:modalIn var(--t-slow);
 }
 @keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 .modal-head{
@@ -481,7 +482,7 @@ td.phone-cell{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.2px
   cursor:pointer;transition:all var(--t-fast);font-size:16px;
 }
 .modal-close:hover{background:var(--c-border);color:var(--c-text)}
-.modal-body{padding:6px 28px 24px}
+.modal-body{padding:6px 28px 24px;flex:1;min-height:0;overflow-y:auto}
 .form-group{margin-bottom:15px}
 .form-group label{
   display:block;font-size:12px;font-weight:600;margin-bottom:5px;
@@ -506,7 +507,7 @@ select.form-input{cursor:pointer;appearance:none;background-image:url("data:imag
 }
 .form-row{display:flex;gap:12px}
 .form-row .form-group{flex:1}
-.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:0 28px 24px}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:0 28px 24px;flex-shrink:0;border-top:1px solid var(--c-border);padding-top:16px;margin-top:auto;background:var(--c-surface)}
 
 /* ===== Gazebo Detail Booking Items ===== */
 .gz-booking{
@@ -1152,7 +1153,7 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
       <h2 id="gazeboDetailTitle">Беседка</h2>
       <button class="modal-close" onclick="closeGazeboDetail()" aria-label="Закрыть">✕</button>
     </div>
-    <div class="modal-body" id="gazeboDetailBody" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-body" id="gazeboDetailBody"></div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeGazeboDetail()">Закрыть</button>
       <button class="btn btn-primary" onclick="createBookingForGazebo()">＋ Забронировать</button>
