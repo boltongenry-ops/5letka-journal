@@ -919,6 +919,9 @@ if(!sessionStorage.getItem('booking_auth_session')&&!localStorage.getItem('booki
       <button class="btn btn-sm btn-outline" onclick="exportCSV()">
         <svg class="icon icon-sm"><use href="#ic-download"/></svg> CSV
       </button>
+      <button class="btn btn-sm btn-outline" onclick="archiveExpired(true)" title="Удалить в архив заявки, у которых время заезда + 3 часа уже прошло">
+        <svg class="icon icon-sm"><use href="#ic-trash"/></svg> Очистить
+      </button>
       <button class="btn btn-sm btn-primary" onclick="openModal()">
         <svg class="icon icon-sm"><use href="#ic-plus"/></svg> Заявка
       </button>
@@ -1239,6 +1242,7 @@ db.collection('bookings').orderBy('date').onSnapshot(function(snapshot){
   snapshot.forEach(function(doc){
     var d = doc.data();
     d.id = doc.id;
+    if(d.archived) return; // в архиве — не показываем
     _bookings.push(d);
   });
   _bookingsReady = true;
@@ -1394,6 +1398,7 @@ function handleSubmit(e){
   }else{
     db.collection('bookings').add({
       clientName:name,phone:phone,gazeboNumber:gazebo,date:date,time:time,carNumber:car,prepay:prepay,duration:dur,
+      archived:false,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     }).then(function(){
       showToast('Заявка создана');
@@ -1867,7 +1872,35 @@ function exportCSV(){
   showToast('Экспортировано '+bs.length+' заявок');
 }
 
+// ===== Archive expired bookings =====
+// Время заезда + duration (или 12ч) + 3ч — после этого бронь уходит в архив
+var ARCHIVE_GRACE_MIN = 3 * 60;
+
+function bookingArchiveAt(b){
+  return bookingEnd(b) + ARCHIVE_GRACE_MIN;
+}
+
+function archiveExpired(manual){
+  // Ручной режим — показать тост; авто — молча
+  var nowMin = Math.floor(Date.now()/60000);
+  var toArchive = _bookings.filter(function(b){
+    return !b.archived && bookingArchiveAt(b) < nowMin;
+  });
+  if(!toArchive.length){
+    if(manual) showToast('Нечего чистить — нет просроченных','info');
+    return;
+  }
+  toArchive.forEach(function(b){
+    db.collection('bookings').doc(b.id).update({archived:true}).catch(function(){});
+  });
+  if(manual) showToast('В архив отправлено: '+toArchive.length);
+}
+
 renderAll();
+
+// Авто-архивация: первая проверка через 10с, далее каждую минуту
+setTimeout(archiveExpired, 10*1000);
+setInterval(archiveExpired, 60*1000);
 
 // Service worker
 if('serviceWorker' in navigator){
