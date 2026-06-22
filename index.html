@@ -1370,15 +1370,15 @@ function handleSubmit(e){
   if(!name||!gazebo||!date||!time){showToast('Заполните обязательные поля','error');return}
   var conflicts=getGazeboConflicts(gazebo,date,time,dur,editId||undefined);
   if(conflicts.length){
-    var msg='Беседка занята: ';
-    conflicts.forEach(function(c,i){
-      if(i)msg+='; ';
-      var endStr=c.duration?calcEndTime(c.date,c.time,c.duration):'';
-      msg+=c.clientName+' ('+c.time+(endStr?'–'+endStr:'')+')';
-    });
     var errEl=document.getElementById('gazeboError');
-    errEl.textContent=msg;
-    errEl.style.display='block';
+    errEl.style.cssText='display:block;color:var(--c-danger);font-size:12px;margin-top:4px;font-weight:500';
+    var parts=conflicts.map(function(c){
+      var endStr=c.duration?calcEndTime(c.date,c.time,c.duration):'';
+      return fmtDate(c.date)+' '+c.time+(endStr?'–'+endStr:'')+' — '+c.clientName;
+    });
+    errEl.innerHTML='<strong>Беседка №'+gazebo+' занята:</strong><br>'+
+      parts.map(function(p){return'• '+p}).join('<br>')+
+      '<br><a href="#" onclick="event.preventDefault();closeModal();openGazeboDetail(\''+gazebo.replace(/'/g,"\\'")+'\')" style="color:var(--c-primary);text-decoration:underline">Посмотреть все брони →</a>';
     document.getElementById('gazeboNumber').classList.add('input-err');
     return;
   }
