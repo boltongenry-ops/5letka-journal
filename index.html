@@ -1242,7 +1242,7 @@ db.collection('bookings').orderBy('date').onSnapshot(function(snapshot){
   snapshot.forEach(function(doc){
     var d = doc.data();
     d.id = doc.id;
-    if(d.archived) return; // в архиве — не показываем
+    if(d.archived||d.deleted) return; // в архиве/удалённые — не показываем
     _bookings.push(d);
   });
   _bookingsReady = true;
@@ -1253,6 +1253,21 @@ db.collection('bookings').orderBy('date').onSnapshot(function(snapshot){
   _bookingsReady = true;
   renderAll();
 });
+
+// Одноразовая очистка мусора: удалить из Firestore все archived/deleted-записи
+// (накопились из-за старой логики, которая помечала вместо удаления)
+db.collection('bookings').get().then(function(snap){
+  var toDelete = [];
+  snap.forEach(function(doc){
+    var d = doc.data();
+    if(d.archived || d.deleted) toDelete.push(doc.ref);
+  });
+  if(!toDelete.length) return;
+  console.log('Cleaning up '+toDelete.length+' archived/deleted bookings...');
+  toDelete.forEach(function(ref){
+    ref.delete().catch(function(){});
+  });
+}).catch(function(){});
 
 function toMinutes(date, time){
   if(!date||!time)return null;
@@ -1318,10 +1333,10 @@ function openConfirm(id,name,gazebo){
 function closeConfirm(){pendingDeleteId=null;document.getElementById('confirmOverlay').classList.remove('active')}
 document.getElementById('confirmDeleteBtn').addEventListener('click',function(){
   if(!pendingDeleteId)return;
-  db.collection('bookings').doc(pendingDeleteId).set({deleted:true},{merge:true}).then(function(){
-    showToast('Заявка перемещена в архив');
+  db.collection('bookings').doc(pendingDeleteId).delete().then(function(){
+    showToast('Заявка удалена');
   }).catch(function(err){
-    showToast('Ошибка','error');console.error(err);
+    showToast('Ошибка удаления','error');console.error(err);
   });
   closeConfirm();
 });
