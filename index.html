@@ -1382,7 +1382,9 @@ function handleSubmit(e){
     errEl.style.cssText='display:block;color:var(--c-danger);font-size:12px;margin-top:4px;font-weight:500';
     var parts=conflicts.map(function(c){
       var endStr=c.duration?calcEndTime(c.date,c.time,c.duration):'';
-      return fmtDate(c.date)+' '+c.time+(endStr?'–'+endStr:'')+' — '+c.clientName;
+      var idShort=(c.id||'').slice(-6);
+      return fmtDate(c.date)+' '+c.time+(endStr?'–'+endStr:'')+' — '+c.clientName+
+        (idShort?' <span style="color:var(--c-text-3);font-size:11px">#'+idShort+'</span>':'');
     });
     errEl.innerHTML='<strong>Беседка №'+gazebo+' занята:</strong><br>'+
       parts.map(function(p){return'• '+p}).join('<br>')+

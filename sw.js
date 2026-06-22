@@ -1,4 +1,4 @@
-var CACHE = '5letka-v1';
+var CACHE = '5letka-v2';
 var ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', function(e){
