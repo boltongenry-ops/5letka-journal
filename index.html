@@ -1276,6 +1276,8 @@ function bookingArchiveAt(b){
 }
 
 // Возвращает массив конфликтующих броней (пустой = нет конфликта)
+// Конфликт — по bookingEnd (фактическое окончание), без учёта 3ч грейс-окна
+// Грейс-окно нужно только для видимости (карточка беседки, модалка детализации)
 function getGazeboConflicts(gazebo, date, time, duration, excludeId){
   if(!gazebo||!date||!time)return [];
   var gzKey=gazebo.trim().toLowerCase();
@@ -1286,9 +1288,7 @@ function getGazeboConflicts(gazebo, date, time, duration, excludeId){
     if(b.gazeboNumber.trim().toLowerCase()!==gzKey)return false;
     var bStart=bookingStart(b);
     if(bStart===null)return false;
-    // Конфликтуем до момента архивации (= окончание + 3ч грейс-окно)
-    var bEnd=bookingArchiveAt(b);
-    // Пересечение интервалов [startMin, endMin) и [bStart, bEnd)
+    var bEnd=bookingEnd(b);
     return startMin<bEnd && bStart<endMin;
   });
 }
