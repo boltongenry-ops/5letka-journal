@@ -1268,6 +1268,13 @@ function bookingStart(b){
   return toMinutes(b.date,b.time);
 }
 
+// ===== Conflict check =====
+var ARCHIVE_GRACE_MIN = 3 * 60;
+
+function bookingArchiveAt(b){
+  return bookingEnd(b) + ARCHIVE_GRACE_MIN;
+}
+
 // Возвращает массив конфликтующих броней (пустой = нет конфликта)
 function getGazeboConflicts(gazebo, date, time, duration, excludeId){
   if(!gazebo||!date||!time)return [];
@@ -1279,7 +1286,8 @@ function getGazeboConflicts(gazebo, date, time, duration, excludeId){
     if(b.gazeboNumber.trim().toLowerCase()!==gzKey)return false;
     var bStart=bookingStart(b);
     if(bStart===null)return false;
-    var bEnd=bookingEnd(b);
+    // Конфликтуем до момента архивации (= окончание + 3ч грейс-окно)
+    var bEnd=bookingArchiveAt(b);
     // Пересечение интервалов [startMin, endMin) и [bStart, bEnd)
     return startMin<bEnd && bStart<endMin;
   });
@@ -1579,7 +1587,7 @@ function renderGazeboGrid(){
   var futureList={};
   all.filter(function(b){return!b.deleted}).forEach(function(b){
     var key=b.gazeboNumber.trim().toLowerCase();
-    if(b.date===df&&bookingEnd(b)>nowMin){
+    if(b.date===df&&bookingArchiveAt(b)>nowMin){
       (occupiedList[key]=occupiedList[key]||[]).push(b);
     }else if(b.date>df&&isBookingFuture(b)){
       (futureList[key]=futureList[key]||[]).push(b);
@@ -1618,7 +1626,7 @@ function openGazeboDetail(num){
   var list=_bookings.filter(function(b){
     if(b.gazeboNumber.trim().toLowerCase()!==key)return false;
     if(b.deleted)return false;
-    return bookingEnd(b)>nowMin;
+    return bookingArchiveAt(b)>nowMin;
   })
     .sort(function(a,b){
       var ca=a.date+a.time, cb=b.date+b.time;
@@ -1873,12 +1881,7 @@ function exportCSV(){
 }
 
 // ===== Archive expired bookings =====
-// Время заезда + duration (или 12ч) + 3ч — после этого бронь уходит в архив
-var ARCHIVE_GRACE_MIN = 3 * 60;
-
-function bookingArchiveAt(b){
-  return bookingEnd(b) + ARCHIVE_GRACE_MIN;
-}
+// ARCHIVE_GRACE_MIN и bookingArchiveAt объявлены выше (в разделе Conflict check)
 
 function archiveExpired(manual){
   // Ручной режим — показать тост; авто — молча
